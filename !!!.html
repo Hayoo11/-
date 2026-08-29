@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0e1230">
+<title>buat hilma</title>
+
+<!-- buat hilma
+     v1 - cuma animasi doang
+     v2 - nambah minigame + pilih mood
+     v3 - jadi 10 game, khusus hp
+     catatan: kata2 nya ada di bagian atas js, gampang diganti -->
+
+<style>
+:root{
+  --langit1:#0e1230; --langit2:#2a2f57; --tanah:#171c3d; --cahaya:#3a3f6b;
+  --teks:#e9ecff; --kotak:20,24,54;
+  --pink:#ff7a9c; --kuning:#ffd166;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;position:fixed;width:100%}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  color:var(--teks);
+  background:linear-gradient(180deg,var(--langit1) 0%,var(--langit2) 62%,var(--tanah) 100%);
+  transition:background .7s ease;
+  user-select:none;-webkit-user-select:none;touch-action:none;
+}
+#cahaya{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(130% 80% at 50% 88%,var(--cahaya) 0%,transparent 62%);
+  opacity:.5;transition:opacity .7s ease,background .7s ease}
+canvas{position:fixed;inset:0;display:block;pointer-events:none}
+#cvBelakang{z-index:1}
+#cvGame{z-index:2}
+#cvDepan{z-index:6}
+#lapisan{position:fixed;inset:0;z-index:3;pointer-events:none}
+#lapisan > *{pointer-events:auto}
+#panggung{position:fixed;inset:0;z-index:4;pointer-events:none}
+#gelap{position:fixed;inset:0;z-index:5;pointer-events:none;
+  box-shadow:inset 0 0 200px rgba(0,0,0,.45);transition:box-shadow .7s ease}
+
+#hilma{
+  position:absolute;left:50%;
+  bottom:calc(3vh + env(safe-area-inset-bottom));
+  width:clamp(140px,42vw,200px);
+  transform:translateX(-50%);
+  filter:drop-shadow(0 12px 16px rgba(0,0,0,.3));
+  transition:width .45s ease,left .45s ease,bottom .45s ease;
+}
+#hilma.kecil{width:clamp(84px,22vw,110px);left:16%;bottom:calc(2vh + env(safe-area-inset-bottom))}
+#hilma.sembunyi{opacity:0}
+#hilma svg{width:100%;height:auto;display:block}
+#goyang{transform-origin:50% 90%;animation:goyang 3.4s ease-in-out infinite}
+@keyframes goyang{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+#hilma.lompat svg{animation:lompatKecil .34s ease}
+@keyframes lompatKecil{0%{transform:scale(1)}42%{transform:scale(1.07) translateY(-8px)}100%{transform:scale(1)}}
+
+/* muka nya ganti2 sesuai mood, tinggal ganti atribut data-muka */
+.f-sedih,.f-biasa,.f-seneng{opacity:0;transition:opacity .45s ease}
+svg[data-muka="sedih"] .f-sedih{opacity:1}
+svg[data-muka="biasa"] .f-biasa{opacity:1}
+svg[data-muka="seneng"] .f-seneng,svg[data-muka="ceria"] .f-seneng{opacity:1}
+.pipi{opacity:0;transition:opacity .5s ease}
+svg[data-muka="seneng"] .pipi{opacity:.75}
+svg[data-muka="ceria"] .pipi{opacity:.95}
+.kilau{opacity:0;transition:opacity .4s ease}
+svg[data-muka="ceria"] .kilau{opacity:1;animation:kedip 1.2s ease-in-out infinite}
+@keyframes kedip{0%,100%{transform:scale(.7)}50%{transform:scale(1.2)}}
+.airmata{transition:opacity .4s ease}
+svg[data-muka="biasa"] .airmata,
+svg[data-muka="seneng"] .airmata,
+svg[data-muka="ceria"] .airmata{opacity:0}
+#keranjang{transition:opacity .35s ease}
+#hilma:not(.bawa) #keranjang{opacity:0}
+
+#atas{position:fixed;top:0;left:0;right:0;z-index:7;pointer-events:none;
+  padding:calc(10px + env(safe-area-inset-top)) 12px 0;
+  display:flex;flex-direction:column;align-items:center;gap:6px}
+#barBungkus{width:min(420px,90vw);background:rgba(var(--kotak),.55);
+  border:1.5px solid rgba(255,255,255,.14);border-radius:20px;padding:8px 13px;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:background .7s ease}
+#barAtas{display:flex;justify-content:space-between;align-items:center;font-weight:800;font-size:.76rem;margin-bottom:6px}
+#skor{opacity:.85;font-variant-numeric:tabular-nums}
+#bar{height:13px;border-radius:20px;background:rgba(255,255,255,.16);overflow:hidden}
+#isi{height:100%;width:0%;border-radius:20px;
+  background:linear-gradient(90deg,var(--pink),var(--kuning));
+  transition:width .35s cubic-bezier(.34,1.4,.5,1);
+  box-shadow:0 0 12px rgba(255,180,120,.5)}
+#omongan{font-size:.95rem;text-align:center;font-weight:600;
+  text-shadow:0 2px 10px rgba(0,0,0,.4);min-height:1.35em;max-width:92vw;
+  transition:opacity .35s ease;padding:0 6px;line-height:1.3}
+
+.melayang{position:fixed;z-index:7;pointer-events:none;font-weight:700;font-size:.98rem;
+  color:#fff;white-space:nowrap;text-shadow:0 2px 12px rgba(0,0,0,.55);
+  transform:translate(-50%,-50%);animation:naik 1.6s ease-out forwards}
+@keyframes naik{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}
+  18%{opacity:1;transform:translate(-50%,-62%) scale(1.05)}
+  100%{opacity:0;transform:translate(-50%,-185%) scale(1)}
+}
+
+.layar{position:fixed;inset:0;z-index:8;display:flex;align-items:center;justify-content:center;
+  padding:calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+  text-align:center;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.kotak{max-width:430px;width:100%;background:rgba(var(--kotak),.78);
+  border:1.5px solid rgba(255,255,255,.16);border-radius:26px;padding:22px 18px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  box-shadow:0 20px 50px rgba(0,0,0,.45);transition:background .7s ease;margin:auto}
+.kotak h1{font-weight:800;font-size:clamp(1.3rem,5.4vw,1.85rem);line-height:1.2;margin-bottom:8px}
+.kotak p{font-size:.95rem;line-height:1.55;opacity:.92;margin-bottom:8px;white-space:pre-wrap}
+.kecilan{font-size:.85rem;opacity:.72;margin-bottom:14px}
+
+.pilihanMood{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px}
+.mood{border:1.5px solid rgba(255,255,255,.2);border-radius:18px;
+  background:rgba(255,255,255,.08);color:inherit;padding:13px 6px;font-weight:700;font-size:.95rem;
+  display:flex;flex-direction:column;align-items:center;gap:5px;transition:transform .12s}
+.mood i{font-style:normal;font-size:1.7rem;line-height:1}
+.mood:active{transform:scale(.95)}
+
+.daftarGame{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.kartuGame{border:1.5px solid rgba(255,255,255,.2);border-radius:16px;
+  background:rgba(255,255,255,.08);color:inherit;padding:11px 9px;text-align:left;
+  position:relative;transition:transform .12s}
+.kartuGame:active{transform:scale(.95)}
+.kartuGame b{display:block;font-size:1.35rem;margin-bottom:3px;line-height:1}
+.kartuGame span{display:block;font-size:.82rem;font-weight:700;line-height:1.2}
+.kartuGame.beres{border-color:rgba(150,255,190,.5);background:rgba(150,255,190,.09)}
+.kartuGame.beres::after{content:'✓';position:absolute;top:7px;right:9px;color:#9dffc4;font-weight:800;font-size:.8rem}
+
+.tombol{border:none;font-weight:800;font-size:1.05rem;color:#3a2140;
+  background:linear-gradient(180deg,#ffe08a,#ff9fb4);padding:13px 30px;border-radius:999px;
+  margin-top:12px;width:100%;box-shadow:0 8px 20px rgba(255,140,160,.4);transition:transform .12s}
+.tombol:active{transform:scale(.97)}
+.tombol.polos{background:rgba(255,255,255,.12);color:inherit;
+  border:1.5px solid rgba(255,255,255,.24);box-shadow:none;font-size:.92rem;padding:11px 22px}
+.ilang{opacity:0;pointer-events:none;visibility:hidden;transition:opacity .4s ease,visibility .4s}
+
+.bulat{position:fixed;z-index:9;width:42px;height:42px;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.2);background:rgba(var(--kotak),.6);color:var(--teks);
+  font-size:1rem;display:flex;align-items:center;justify-content:center;
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:background .7s ease}
+#tbSuara{top:calc(10px + env(safe-area-inset-top));right:12px}
+#tbBalik{top:calc(10px + env(safe-area-inset-top));left:12px}
+
+.gelembung{position:absolute;top:0;left:0;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;text-align:center;padding:7px;font-size:.76rem;font-weight:800;
+  line-height:1.15;color:rgba(255,255,255,.94);
+  background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.42),rgba(140,160,220,.2) 60%,rgba(90,110,180,.3));
+  border:1.5px solid rgba(255,255,255,.35);
+  box-shadow:inset 0 0 16px rgba(255,255,255,.2),0 4px 14px rgba(0,0,0,.2);will-change:transform}
+.gelembung.pecah{animation:pudar .25s ease-out forwards;pointer-events:none}
+@keyframes pudar{to{opacity:0}}
+
+#papanKartu{position:absolute;left:50%;top:50%;transform:translate(-50%,-52%);
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(290px,82vw)}
+.kartu{aspect-ratio:3/4;border-radius:14px;position:relative;perspective:600px;background:none;border:none;padding:0}
+.kartu .dalam{position:absolute;inset:0;transition:transform .35s ease;transform-style:preserve-3d}
+.kartu.buka .dalam{transform:rotateY(180deg)}
+.kartu .sisi{position:absolute;inset:0;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  backface-visibility:hidden;-webkit-backface-visibility:hidden;font-size:1.6rem;
+  border:1.5px solid rgba(255,255,255,.22)}
+.kartu .depan{background:linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.05));
+  font-size:1.1rem;opacity:.6;color:#fff;font-weight:800}
+.kartu .belakang{background:linear-gradient(160deg,#ffd9e4,#ffeec2);transform:rotateY(180deg)}
+.kartu.cocok .belakang{background:linear-gradient(160deg,#c9ffdd,#eaffc9)}
+
+#balon{position:absolute;top:0;left:0;width:74px;will-change:transform;
+  filter:drop-shadow(0 8px 12px rgba(0,0,0,.25))}
+#balon svg{width:100%;height:auto;display:block;pointer-events:none}
+
+.targetHati{position:absolute;top:0;left:0;width:64px;height:64px;display:flex;
+  align-items:center;justify-content:center;font-size:2.1rem;will-change:transform;
+  animation:munculTarget .18s ease-out}
+@keyframes munculTarget{from{transform:scale(.4);opacity:0}}
+
+#bunga{position:absolute;left:60%;bottom:calc(6vh + env(safe-area-inset-bottom));
+  width:150px;transform:translateX(-50%);pointer-events:none}
+#zonaTap{position:absolute;inset:0}
+
+#susunan{position:absolute;left:50%;top:34%;transform:translateX(-50%);
+  width:88vw;max-width:400px;min-height:56px;border-radius:16px;
+  background:rgba(255,255,255,.1);border:1.5px dashed rgba(255,255,255,.25);
+  display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;padding:12px}
+#pilihanKata{position:absolute;left:50%;top:52%;transform:translateX(-50%);
+  width:88vw;max-width:400px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chip{border:1.5px solid rgba(255,255,255,.25);background:rgba(255,255,255,.14);color:inherit;
+  border-radius:999px;padding:10px 16px;font-size:.95rem;font-weight:700;transition:transform .12s}
+.chip:active{transform:scale(.94)}
+.chip.kepake{opacity:.28;pointer-events:none}
+.chip.salah{animation:goyangSalah .3s}
+@keyframes goyangSalah{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.katatersusun{font-size:.98rem;font-weight:800;padding:6px 10px;border-radius:999px;background:rgba(255,255,255,.2)}
+
+.titikBintang{position:absolute;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:1.1rem;
+  background:rgba(255,255,255,.14);border:1.5px solid rgba(255,255,255,.3);color:#fff}
+.titikBintang.giliran{background:rgba(255,225,140,.35);border-color:#ffe08a;animation:denyut 1s ease-in-out infinite}
+@keyframes denyut{0%,100%{transform:scale(1)}50%{transform:scale(1.18)}}
+.titikBintang.udah{background:rgba(255,225,140,.6);border-color:#fff}
+
+#isiSurat{font-size:.97rem;line-height:1.8;text-align:left;white-space:pre-wrap;min-height:13em;
+  background:rgba(255,255,255,.09);border-radius:16px;padding:15px 16px;margin:8px 0 4px}
+
+.bawahLayar{position:fixed;bottom:calc(4px + env(safe-area-inset-bottom));left:0;right:0;z-index:7;
+  text-align:center;font-size:.68rem;opacity:.4;pointer-events:none}
+
+@media (prefers-reduced-motion:reduce){
+  #goyang,#hilma.lompat svg,.kilau,.titikBintang.giliran{animation:none!important}
+}
+</style>
+</head>
+<body>
+
+<div id="cahaya"></div>
+<canvas id="cvBelakang"></canvas>
+<canvas id="cvGame"></canvas>
+<div id="lapisan"></div>
+
+<div id="panggung">
+<div id="hilma">
+<svg viewBox="0 0 220 300" xmlns="http://www.w3.org/2000/svg" data-muka="sedih"><g id="goyang">
+<path d="M52 96 C46 40 96 20 110 20 C124 20 174 40 168 96 C176 140 158 176 110 176 C62 176 44 140 52 96 Z" fill="#3a2b3f"/>
+<path d="M92 150 h36 v18 c30 6 46 30 46 62 v70 H46 v-70 c0-32 16-56 46-62 Z" fill="#f2c4a0"/>
+<path d="M64 226 c0-30 16-52 46-52 s46 22 46 52 v48 H64 Z" fill="#8a7bd8"/>
+<ellipse cx="110" cy="98" rx="50" ry="54" fill="#ffd6b3"/><circle cx="61" cy="104" r="9" fill="#ffd6b3"/><circle cx="159" cy="104" r="9" fill="#ffd6b3"/>
+<path d="M60 84 C64 46 96 34 110 34 C124 34 156 46 160 84 C150 66 132 62 110 74 C88 62 70 66 60 84 Z" fill="#40303f"/>
+<path d="M60 84 C70 66 88 62 110 74 C90 78 76 88 68 104 C62 98 59 92 60 84 Z" fill="#40303f"/>
+<path d="M160 84 C150 66 132 62 110 74 C130 78 144 88 152 104 C158 98 161 92 160 84 Z" fill="#40303f"/>
+<g transform="translate(150 74)"><circle cx="0" cy="-6" r="4.5" fill="#ff9fb4"/><circle cx="6" cy="0" r="4.5" fill="#ff9fb4"/><circle cx="-6" cy="0" r="4.5" fill="#ff9fb4"/><circle cx="0" cy="6" r="4.5" fill="#ff9fb4"/><circle cx="0" cy="0" r="4" fill="#ffe08a"/></g>
+<ellipse class="pipi" cx="85" cy="112" rx="10" ry="6.5" fill="#ff9a9a"/><ellipse class="pipi" cx="135" cy="112" rx="10" ry="6.5" fill="#ff9a9a"/>
+
+<g class="f-sedih">
+<path d="M76 86 q10 -6 20 -1" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<path d="M124 86 q10 -6 20 -1" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<ellipse cx="88" cy="100" rx="6.5" ry="7.5" fill="#4a3a3f"/><ellipse cx="132" cy="100" rx="6.5" ry="7.5" fill="#4a3a3f"/>
+<circle cx="90" cy="102" r="2" fill="#fff" opacity=".85"/><circle cx="134" cy="102" r="2" fill="#fff" opacity=".85"/>
+<path d="M96 128 q14 -12 28 0" stroke="#c86a72" stroke-width="4" fill="none" stroke-linecap="round"/>
+<path class="airmata" d="M85 108 q-3 10 0 16 q4 -3 4 -9 q0 -5 -4 -7 Z" fill="#8fd0ff" opacity=".9"/>
+</g>
+
+<g class="f-biasa">
+<path d="M76 84 q10 -3 20 0" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<path d="M124 84 q10 -3 20 0" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<circle cx="88" cy="100" r="7.5" fill="#4a3a3f"/><circle cx="132" cy="100" r="7.5" fill="#4a3a3f"/>
+<circle cx="90.5" cy="97.5" r="2.4" fill="#fff"/><circle cx="134.5" cy="97.5" r="2.4" fill="#fff"/>
+<path d="M98 124 q12 6 24 0" stroke="#c86a72" stroke-width="4" fill="none" stroke-linecap="round"/>
+</g>
+
+<g class="f-seneng">
+<path d="M77 82 q10 -4 19 -1" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<path d="M124 81 q9 -3 19 1" stroke="#5b4a4f" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+<path d="M80 102 q8 -12 16 0" stroke="#4a3a3f" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M124 102 q8 -12 16 0" stroke="#4a3a3f" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M92 122 q18 18 36 0" stroke="#c8555f" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+<path d="M96 124 q14 12 28 0 Z" fill="#ff8a94"/>
+<g class="kilau" transform="translate(70 78)"><path d="M0 -6 L1.6 -1.6 L6 0 L1.6 1.6 L0 6 L-1.6 1.6 L-6 0 L-1.6 -1.6 Z" fill="#fff3b0"/></g>
+<g class="kilau" transform="translate(152 84)"><path d="M0 -5 L1.3 -1.3 L5 0 L1.3 1.3 L0 5 L-1.3 1.3 L-5 0 L-1.3 -1.3 Z" fill="#fff3b0"/></g>
+</g>
+
+<path d="M108 106 q3 4 -1 6" stroke="#e0a985" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+
+<g id="keranjang">
+<path d="M74 222 q-18 -6 -20 14" stroke="#f2c4a0" stroke-width="13" fill="none" stroke-linecap="round"/>
+<path d="M146 222 q18 -6 20 14" stroke="#f2c4a0" stroke-width="13" fill="none" stroke-linecap="round"/>
+<path d="M52 244 h116 l-12 40 a10 10 0 0 1 -10 8 H74 a10 10 0 0 1 -10 -8 Z" fill="#d79a5b"/>
+<path d="M52 244 h116 l-2 8 H54 Z" fill="#c98544"/>
+<path d="M62 252 h96 M66 266 h88 M70 280 h80" stroke="#b9772f" stroke-width="2.4" opacity=".55"/>
+<path d="M110 234 c-6 -8 -18 -2 -12 6 c3 5 12 9 12 9 s9 -4 12 -9 c6 -8 -6 -14 -12 -6 Z" fill="#ff5c86"/>
+</g>
+</g></svg>
+</div>
+</div>
+
+<div id="gelap"></div>
+<canvas id="cvDepan"></canvas>
+
+<div id="atas">
+  <div id="barBungkus">
+    <div id="barAtas"><span>mood hilma</span><span id="skor"></span></div>
+    <div id="bar"><div id="isi"></div></div>
+  </div>
+  <div id="omongan"></div>
+</div>
+
+<button class="bulat" id="tbSuara">🔊</button>
+<button class="bulat ilang" id="tbBalik">←</button>
+
+<div class="layar" id="lyMood">
+  <div class="kotak">
+    <h1>hilma lagi gimana?</h1>
+    <p class="kecilan">pilih dulu, biar nyambung sama perasaannya</p>
+    <div class="pilihanMood">
+      <button class="mood" data-mood="sedih"><i>😔</i>sedih</button>
+      <button class="mood" data-mood="capek"><i>🥱</i>capek</button>
+      <button class="mood" data-mood="kesel"><i>😤</i>kesel</button>
+      <button class="mood" data-mood="seneng"><i>😄</i>seneng</button>
+    </div>
+  </div>
+</div>
+
+<div class="layar ilang" id="lyMenu">
+  <div class="kotak">
+    <h1 id="judulMenu">yuk temenin dia</h1>
+    <p class="kecilan" id="subMenu"></p>
+    <div class="daftarGame" id="daftarGame"></div>
+    <button class="tombol ilang" id="tbSurat">buka surat 💌</button>
+    <button class="tombol polos" id="tbGantiMood">ganti mood</button>
+  </div>
+</div>
+
+<div class="layar ilang" id="lySelesai">
+  <div class="kotak">
+    <h1 id="judulSelesai">nice</h1>
+    <p id="pesanSelesai"></p>
+    <button class="tombol" id="tbLanjut">lanjut</button>
+  </div>
+</div>
+
+<div class="layar ilang" id="lySurat">
+  <div class="kotak">
+    <h1>buat kamu</h1>
+    <div id="isiSurat"></div>
+    <button class="tombol ilang" id="tbPeluk">peluk 🤗</button>
+  </div>
+</div>
+
+<div class="bawahLayar">buat hilma</div>
+
+<script>
+(function(){
+"use strict";
+
+// ---- kata kata, ganti disini aja ----
+
+var kataManis = [
+  "gapapa kok, gausah dipaksain",
+  "kamu udah cukup hebat hari ini",
+  "gausah dipikirin banget lah",
+  "aku disini kok, santai",
+  "kamu tuh lucu tau gak sih",
+  "istirahat bentar gapapa",
+  "senyum dikit napa hehe",
+  "besok pasti lebih enak kok",
+  "makan dulu gih, jangan telat",
+  "udah jangan sedih lagi ya",
+  "kamu keren, beneran gak boong",
+  "gausah ngerasa ngerepotin ya"
+];
+
+var kataBerat = ["overthinking","capek","kepikiran","bete","sepi","males","ngantuk","bingung","kesel","insecure"];
+var kataEnak = ["lega","santai","gapapa","tenang","aman","udahan","bebas","adem"];
+var pujian = ["manis","lucu","gemes","hebat","keren","sabar","kuat","pinter","baik","cantik"];
+
+var pasanganKartu = [
+  {ikon:"🌸", pesan:"santai aja, gausah buru buru"},
+  {ikon:"🍓", pesan:"kamu manis, seriusan"},
+  {ikon:"🌙", pesan:"malem ini bakal lewat kok"},
+  {ikon:"☕", pesan:"ngopi dulu gak sih"},
+  {ikon:"🐣", pesan:"pelan pelan aja tumbuhnya"},
+  {ikon:"🎧", pesan:"nanti aku kirim lagu deh"}
+];
+
+var kalimatSusun = [
+  ["kamu","gak","sendirian","kok"],
+  ["jangan","lupa","makan","ya"],
+  ["istirahat","dulu","gapapa","banget"],
+  ["aku","selalu","ada","disini"]
+];
+
+var surat =
+"hai hilma\n\n"+
+"gatau kamu lagi kenapa hari ini\n"+
+"tapi keliatan lagi gak enak aja\n\n"+
+"gapapa kok, gausah dijelasin\n"+
+"aku cuma pengen kamu tau\n"+
+"kalo lagi berat, cerita aja\n\n"+
+"kalo belum mau cerita ya gapapa\n"+
+"aku tungguin\n\n"+
+"udah ya, jangan sedih lagi\n"+
+"senyum dikit napa hehe 💛";
+
+var daftarMood = {
+  sedih:{
+    awal:0, hujan:1.0, sapa:"lagi sedih ya? sini aku temenin",
+    warna:{l1:"#0e1230",l2:"#2a2f57",tanah:"#171c3d",cahaya:"#3a3f6b",teks:"#e9ecff",kotak:"20,24,54"},
+    omong:["gapapa sedih, gausah ada alesannya","nangis dulu gapapa kok","pelan pelan aja ya"]
+  },
+  capek:{
+    awal:12, hujan:0.5, sapa:"capek banget ya hari ini",
+    warna:{l1:"#232338",l2:"#3b3a55",tanah:"#22213a",cahaya:"#4a4869",teks:"#eceaf6",kotak:"30,29,52"},
+    omong:["rebahan dulu gapapa","gak semua hari harus produktif","udah, taro dulu hp nya wkwk"]
+  },
+  kesel:{
+    awal:6, hujan:0.25, sapa:"lagi kesel? wajar sih",
+    warna:{l1:"#2a0f22",l2:"#4a1b34",tanah:"#24102a",cahaya:"#6b2a46",teks:"#ffe9f0",kotak:"46,16,36"},
+    omong:["keluarin aja jangan ditahan","marah gapapa kok","abis ini kita cari yang adem"]
+  },
+  seneng:{
+    awal:45, hujan:0, sapa:"lagi seneng? yaudah bikin makin seneng",
+    warna:{l1:"#7a5c8a",l2:"#e59aa8",tanah:"#8a6a86",cahaya:"#c98aa0",teks:"#fff0f6",kotak:"70,42,66"},
+    omong:["simpen mood ini ya","ketawa kamu tuh nular","hari ini enak banget kayaknya"]
+  }
+};
+
+var warnaCerah = {l1:"#ffd39e",l2:"#ffb3c8",tanah:"#ffe3b3",cahaya:"#fff2c9",teks:"#5a3d5c",kotak:"255,240,224"};
+
+
+function el(s){ return document.querySelector(s); }
+function acak(a,b){ return a + Math.random()*(b-a); }
+function ambilAcak(a){ return a[(Math.random()*a.length)|0]; }
+function batasi(v,a,b){ return v<a?a:(v>b?b:v); }
+
+var cvB = el("#cvBelakang"), cvG = el("#cvGame"), cvD = el("#cvDepan");
+var ctxB = cvB.getContext("2d"), ctxG = cvG.getContext("2d"), ctxD = cvD.getContext("2d");
+var lapisan = el("#lapisan");
+var hilma = el("#hilma"), muka = hilma.querySelector("svg");
+var isiBar = el("#isi"), omongan = el("#omongan"), skorTeks = el("#skor");
+var lyMood = el("#lyMood"), lyMenu = el("#lyMenu"), lySelesai = el("#lySelesai"), lySurat = el("#lySurat");
+var tbBalik = el("#tbBalik");
+
+var L = 0, T = 0, dpr = 1;
+
+function pasangCanvas(c, x){
+  c.width = Math.floor(L*dpr);
+  c.height = Math.floor(T*dpr);
+  c.style.width = L+"px";
+  c.style.height = T+"px";
+  x.setTransform(dpr,0,0,dpr,0,0);
+}
+function ukurUlang(){
+  dpr = Math.min(window.devicePixelRatio||1, 2);  // kalo gak dibatesin hp kentang lemot
+  L = window.innerWidth;
+  T = window.innerHeight;
+  pasangCanvas(cvB,ctxB); pasangCanvas(cvG,ctxG); pasangCanvas(cvD,ctxD);
+  bikinHujan(); bikinBintang();
+  // console.log('ukuran', L, T, dpr);
+}
+window.addEventListener("resize", ukurUlang);
+window.addEventListener("orientationchange", function(){ setTimeout(ukurUlang, 250); });
+
+
+var st = { mood:"sedih", poin:0, beres:{}, jmlBeres:0, progres:0, ngitung:false };
+var TOTAL_GAME = 10;
+
+function hitungPoin(){
+  var awal = daftarMood[st.mood].awal;
+  var p = st.ngitung ? st.progres : 0;
+  var f = batasi((st.jmlBeres + p) / TOTAL_GAME, 0, 1);
+  st.poin = awal + (100-awal)*f;
+  gambarUlangUI();
+}
+function mukaSekarang(){
+  if(st.poin >= 99) return "ceria";
+  if(st.poin >= 68) return "seneng";
+  if(st.poin >= 34) return "biasa";
+  return "sedih";
+}
+function gambarUlangUI(){
+  isiBar.style.width = batasi(st.poin,0,100).toFixed(1)+"%";
+  muka.setAttribute("data-muka", mukaSekarang());
+  gantiSuasana();
+}
+function loncatDikit(){
+  hilma.classList.remove("lompat");
+  void hilma.offsetWidth;   // ini biar animasinya mau ngulang, kalo gak gini gak jalan
+  hilma.classList.add("lompat");
+}
+
+function keRGB(h){ return [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]; }
+function campur(a,b,t){
+  var A = keRGB(a), B = keRGB(b);
+  return "rgb("+Math.round(A[0]+(B[0]-A[0])*t)+","+Math.round(A[1]+(B[1]-A[1])*t)+","+Math.round(A[2]+(B[2]-A[2])*t)+")";
+}
+function campurTri(a,b,t){
+  var A = a.split(",").map(Number), B = b.split(",").map(Number);
+  return Math.round(A[0]+(B[0]-A[0])*t)+","+Math.round(A[1]+(B[1]-A[1])*t)+","+Math.round(A[2]+(B[2]-A[2])*t);
+}
+
+var akar = document.documentElement.style;
+function gantiSuasana(){
+  var m = daftarMood[st.mood];
+  var t = st.poin/100;
+  t = t*t*(3-2*t);   // biar transisinya gak kaku
+  akar.setProperty("--langit1", campur(m.warna.l1, warnaCerah.l1, t));
+  akar.setProperty("--langit2", campur(m.warna.l2, warnaCerah.l2, t));
+  akar.setProperty("--tanah", campur(m.warna.tanah, warnaCerah.tanah, t));
+  akar.setProperty("--cahaya", campur(m.warna.cahaya, warnaCerah.cahaya, t));
+  akar.setProperty("--teks", campur(m.warna.teks, warnaCerah.teks, t));
+  akar.setProperty("--kotak", campurTri(m.warna.kotak, warnaCerah.kotak, t));
+  el("#cahaya").style.opacity = (0.5 + t*0.5).toFixed(2);
+  el("#gelap").style.boxShadow = "inset 0 0 200px rgba(0,0,0,"+(0.45 - t*0.35).toFixed(2)+")";
+}
+
+
+var jamOmong = null, jedaOmong = null;
+
+function tulis(t){
+  omongan.style.opacity = 0;
+  setTimeout(function(){
+    omongan.textContent = t;
+    omongan.style.opacity = 1;
+  }, 180);
+}
+function mulaiOmong(){
+  stopOmong();
+  var kumpulan = daftarMood[st.mood].omong.concat(kataManis);
+  tulis(ambilAcak(kumpulan));
+  jamOmong = setInterval(function(){ tulis(ambilAcak(kumpulan)); }, 5200);
+}
+function stopOmong(){
+  if(jamOmong){ clearInterval(jamOmong); jamOmong = null; }
+  if(jedaOmong){ clearTimeout(jedaOmong); jedaOmong = null; }
+}
+function kataNaik(teks, x, y, warna){
+  var d = document.createElement("div");
+  d.className = "melayang";
+  d.textContent = teks;
+  d.style.left = batasi(x,70,L-70)+"px";
+  d.style.top = batasi(y,80,T-80)+"px";
+  if(warna) d.style.color = warna;
+  document.body.appendChild(d);
+  setTimeout(function(){ if(d.parentNode) d.parentNode.removeChild(d); }, 1650);
+}
+
+
+// suaranya pake oscillator, males nyari file mp3 + nambah berat
+var audio = null, sunyi = false;
+
+function nyalainAudio(){
+  try{
+    if(!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if(audio.state === "suspended") audio.resume();
+  }catch(e){
+    audio = null;   // kalo browsernya gak support yaudah diem aja
+  }
+}
+function nada(f, lama, tipe, keras){
+  if(!audio || sunyi) return;
+  try{
+    var o = audio.createOscillator(), g = audio.createGain();
+    o.type = tipe || "triangle";
+    o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, audio.currentTime);
+    g.gain.exponentialRampToValueAtTime(keras || 0.14, audio.currentTime+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime+(lama||0.14));
+    o.connect(g); g.connect(audio.destination);
+    o.start();
+    o.stop(audio.currentTime + (lama||0.14) + 0.03);
+  }catch(e){}
+}
+function ting(f){
+  nada(f, 0.12, "triangle", 0.15);
+  setTimeout(function(){ nada(f*1.5, 0.1, "sine", 0.1); }, 55);
+}
+function menang(){
+  var n = [523,659,784,1046,1318];
+  for(var i=0;i<n.length;i++){
+    (function(v,k){ setTimeout(function(){ nada(v,0.34,"triangle",0.14); }, k*110); })(n[i], i);
+  }
+}
+function getar(ms){
+  if(navigator.vibrate){
+    try{ navigator.vibrate(ms||18); }catch(e){}
+  }
+}
+el("#tbSuara").addEventListener("click", function(){
+  sunyi = !sunyi;
+  this.textContent = sunyi ? "🔇" : "🔊";
+});
+
+
+// ---- latar belakang ----
+
+var hujan = [], bintang = [], hatiTerbang = [], hitungHati = 0;
+
+function bikinHujan(){
+  hujan = [];
+  for(var i=0;i<150;i++) hujan.push({x:acak(0,L), y:acak(0,T), p:acak(8,20), c:acak(4,10)});
+}
+function bikinBintang(){
+  bintang = [];
+  for(var i=0;i<60;i++) bintang.push({x:acak(0,L), y:acak(0,T*0.6), r:acak(0.6,2.2), f:acak(0,6.28), c:acak(1,3)});
+}
+function gambarBintang(t){
+  var jelas = batasi(1 - st.poin/58, 0, 1);
+  if(jelas <= 0) return;
+  ctxB.fillStyle = "#fff";
+  for(var i=0;i<bintang.length;i++){
+    var s = bintang[i];
+    ctxB.globalAlpha = jelas * (0.5 + 0.5*Math.sin(t*0.002*s.c + s.f)) * 0.9;
+    ctxB.beginPath();
+    ctxB.arc(s.x, s.y, s.r, 0, 6.28);
+    ctxB.fill();
+  }
+  ctxB.globalAlpha = 1;
+}
+function gambarHujan(){
+  var kuat = batasi(1 - st.poin/82, 0, 1) * daftarMood[st.mood].hujan;
+  if(kuat <= 0.02) return;
+  var n = Math.floor(hujan.length * kuat);
+  ctxB.strokeStyle = "rgba(150,180,220,"+(0.34*kuat+0.05).toFixed(3)+")";
+  ctxB.lineWidth = 1.4;
+  ctxB.beginPath();
+  for(var i=0;i<n;i++){
+    var d = hujan[i];
+    ctxB.moveTo(d.x, d.y);
+    ctxB.lineTo(d.x-1.5, d.y+d.p);
+    d.y += d.c; d.x -= 0.5;
+    if(d.y > T){ d.y = -d.p; d.x = acak(0,L); }
+  }
+  ctxB.stroke();
+}
+function gambarPelangi(){
+  var a = batasi((st.poin-68)/32, 0, 1);
+  if(a <= 0) return;
+  var warna = ["#ff8a8a","#ffcf6b","#fff36b","#8ee87f","#7fd0ff","#b58cff"];
+  var R = Math.max(L,T) * 0.62;
+  ctxB.save();
+  ctxB.globalAlpha = a*0.5;
+  ctxB.lineWidth = 11;
+  for(var i=0;i<warna.length;i++){
+    ctxB.strokeStyle = warna[i];
+    ctxB.beginPath();
+    ctxB.arc(L*0.5, T*1.03, R - i*11, Math.PI*1.08, Math.PI*1.92);
+    ctxB.stroke();
+  }
+  ctxB.restore();
+}
+function gambarHatiTerbang(){
+  if(st.poin < 50) return;
+  hitungHati++;
+  if(hitungHati % (st.poin>=99 ? 13 : 28) === 0){
+    hatiTerbang.push({x:acak(0,L), y:T+20, c:-acak(0.6,1.7), s:acak(1.6,3), g:acak(0,6.28), umur:1, p:Math.random()<0.5});
+  }
+  for(var i=hatiTerbang.length-1;i>=0;i--){
+    var h = hatiTerbang[i];
+    h.y += h.c; h.g += 0.03; h.x += Math.sin(h.g)*0.6; h.umur -= 0.004;
+    if(h.y < -30 || h.umur <= 0){ hatiTerbang.splice(i,1); continue; }
+    ctxB.globalAlpha = Math.min(0.6, h.umur);
+    ctxB.fillStyle = h.p ? "#ff9fb4" : "#ffd0dc";
+    bentukHati(ctxB, h.x, h.y, h.s, Math.sin(h.g)*0.2);
+    ctxB.fill();
+  }
+  ctxB.globalAlpha = 1;
+}
+
+function bentukHati(c,x,y,s,r){
+  c.save();
+  c.translate(x,y); c.rotate(r||0); c.scale(s,s);
+  c.beginPath();
+  c.moveTo(0,3);
+  c.bezierCurveTo(-5,-3,-9,2,0,9);
+  c.bezierCurveTo(9,2,5,-3,0,3);
+  c.closePath();
+  c.restore();
+}
+function bentukBintang(c,x,y,s,r){
+  c.save();
+  c.translate(x,y); c.rotate(r||0); c.scale(s,s);
+  c.beginPath();
+  for(var i=0;i<5;i++){
+    var a1 = (Math.PI*2*i/5) - Math.PI/2;
+    var a2 = a1 + Math.PI/5;
+    c.lineTo(Math.cos(a1)*8, Math.sin(a1)*8);
+    c.lineTo(Math.cos(a2)*3.6, Math.sin(a2)*3.6);
+  }
+  c.closePath();
+  c.restore();
+}
+
+
+var partikel = [];
+var warnaKonfeti = ["#ff8a8a","#ffcf6b","#fff36b","#8ee87f","#7fd0ff","#b58cff","#ff9fb4"];
+
+function ledak(x, y, emas){
+  for(var i=0;i<13;i++){
+    var a = acak(0,6.28), c = acak(1.4,5.2);
+    partikel.push({
+      x:x, y:y, cx:Math.cos(a)*c, cy:Math.sin(a)*c - 1.5,
+      umur:1, turun:acak(0.02,0.04), s:acak(2,5), r:acak(0,6.28), pr:acak(-0.3,0.3), grav:0.12,
+      w: emas ? ambilAcak(["#ffe08a","#fff3b0"]) : ambilAcak(["#ff8fb0","#ffd1dc"]),
+      b: emas ? "bintang" : "hati"
+    });
+  }
+}
+function konfeti(){
+  for(var i=0;i<130;i++){
+    partikel.push({
+      x:acak(0,L), y:-20-acak(0,T*0.4), cx:acak(-1,1), cy:acak(1.5,5),
+      umur:1, turun:acak(0.005,0.011), s:acak(4,9), r:acak(0,6.28), pr:acak(-0.35,0.35),
+      grav:0.035, w:ambilAcak(warnaKonfeti), b:Math.random()<0.5 ? "kotak" : "hati"
+    });
+  }
+}
+function gambarPartikel(){
+  for(var i=partikel.length-1;i>=0;i--){
+    var p = partikel[i];
+    p.x += p.cx; p.y += p.cy; p.cy += p.grav; p.r += p.pr; p.umur -= p.turun;
+    if(p.umur <= 0 || p.y > T+50){ partikel.splice(i,1); continue; }
+    ctxD.globalAlpha = Math.max(0, p.umur);
+    ctxD.fillStyle = p.w;
+    if(p.b === "kotak"){
+      ctxD.save();
+      ctxD.translate(p.x,p.y); ctxD.rotate(p.r);
+      ctxD.fillRect(-p.s/2, -p.s/2, p.s, p.s*0.6);
+      ctxD.restore();
+    } else if(p.b === "bintang"){
+      bentukBintang(ctxD,p.x,p.y,p.s/6,p.r); ctxD.fill();
+    } else {
+      bentukHati(ctxD,p.x,p.y,p.s/7,p.r); ctxD.fill();
+    }
+  }
+  ctxD.globalAlpha = 1;
+}
+
+
+var geser = 0, tujuanGeser = 0;
+function gerakinHilma(dt){
+  geser += (tujuanGeser - geser) * Math.min(1, dt*0.014);
+  hilma.style.transform = "translateX(calc(-50% + "+geser.toFixed(1)+"px))";
+}
+
+function buat(kelas, induk){
+  var d = document.createElement("div");
+  if(kelas) d.className = kelas;
+  (induk || lapisan).appendChild(d);
+  return d;
+}
+function hapus(d){ if(d && d.parentNode) d.parentNode.removeChild(d); }
+
+
+// ================== game game nya ==================
+// tiap game bentuknya sama: punya .petunjuk, .jalan(dt), .bersih()
+// yang butuh gambar di canvas tambahin .gambar()
+
+function gTangkep(){
+  var jatuh = [], jeda = 0, dapet = 0;
+  var butuh = 14;
+
+  hilma.classList.add("bawa");
+  hilma.classList.remove("kecil","sembunyi");
+  tujuanGeser = 0;
+
+  function batasGeser(){ return Math.max(0, L/2 - hilma.offsetWidth/2); }
+  function pindah(e){
+    var x = e.touches ? e.touches[0].clientX : e.clientX;
+    tujuanGeser = batasi(x - L/2, -batasGeser(), batasGeser());
+  }
+  window.addEventListener("touchmove", pindah, {passive:true});
+  window.addEventListener("touchstart", pindah, {passive:true});
+  window.addEventListener("pointermove", pindah);
+
+  this.petunjuk = "geser jari kiri kanan, tangkep hatinya";
+
+  this.jalan = function(dt){
+    jeda += dt;
+    if(jeda > Math.max(340, 700 - dapet*22)){
+      jeda = 0;
+      jatuh.push({x:acak(40,L-40), y:-30, c:acak(2.2,4.2), r:acak(0,6.28), pr:acak(-.03,.03),
+                  s:acak(2.4,3.3), emas:Math.random()<0.32});
+    }
+    var tengah = L/2 + geser;
+    var garis = T - hilma.offsetHeight*0.30 - T*0.03;
+    var lebar = Math.max(50, hilma.offsetWidth*0.34);
+
+    for(var i=jatuh.length-1;i>=0;i--){
+      var h = jatuh[i];
+      h.y += h.c; h.r += h.pr;
+      if(h.y >= garis && h.y <= garis+56 && Math.abs(h.x-tengah) < lebar){
+        jatuh.splice(i,1);
+        dapet++;
+        ledak(h.x,h.y,h.emas); ting(h.emas?660:523); loncatDikit(); getar(12);
+        kataNaik(h.emas ? ambilAcak(pujian) : "💗", h.x, h.y-20, h.emas?"#ffe08a":"#ffb6cd");
+        skorTeks.textContent = dapet+" / "+butuh;
+        st.progres = dapet/butuh;
+        hitungPoin();
+        if(dapet >= butuh) selesaiGame("tangkep", "dapet "+dapet+" pelukan kecil, mukanya udah beda kan");
+        continue;
+      }
+      if(h.y > T+40) jatuh.splice(i,1);
+    }
+  };
+
+  this.gambar = function(){
+    for(var i=0;i<jatuh.length;i++){
+      var h = jatuh[i];
+      ctxG.shadowBlur = 13;
+      if(h.emas){
+        ctxG.fillStyle = "#ffd76b"; ctxG.shadowColor = "rgba(255,220,110,.8)";
+        bentukBintang(ctxG,h.x,h.y,h.s,h.r);
+      } else {
+        ctxG.fillStyle = "#ff6b93"; ctxG.shadowColor = "rgba(255,120,150,.75)";
+        bentukHati(ctxG,h.x,h.y,h.s,h.r);
+      }
+      ctxG.fill();
+      ctxG.shadowBlur = 0;
+    }
+  };
+
+  this.bersih = function(){
+    window.removeEventListener("touchmove", pindah);
+    window.removeEventListener("touchstart", pindah);
+    window.removeEventListener("pointermove", pindah);
+    hilma.classList.remove("bawa");
+    jatuh = []; tujuanGeser = 0;
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gGelembung(){
+  var bola = [], jeda = 0, pecah = 0, butuh = 12;
+  hilma.classList.add("kecil");
+
+  function keluar(){
+    var uk = acak(78,112);
+    var d = buat("gelembung");
+    d.style.width = uk+"px";
+    d.style.height = uk+"px";
+    d.textContent = ambilAcak(kataBerat);
+
+    var b = {d:d, x:acak(uk/2+8, Math.max(uk/2+9, L-uk/2-8)), y:T+uk, c:-acak(0.5,1.2), g:acak(0,6.28), uk:uk, mati:false};
+
+    d.addEventListener("pointerdown", function(ev){
+      ev.preventDefault();
+      if(b.mati) return;
+      b.mati = true;
+      d.classList.add("pecah");
+      ledak(b.x,b.y,false); ting(acak(420,700)); loncatDikit(); getar(14);
+      kataNaik(ambilAcak(kataEnak), b.x, b.y-10, "#bff2ff");
+      pecah++;
+      skorTeks.textContent = pecah+" / "+butuh;
+      st.progres = pecah/butuh;
+      hitungPoin();
+      setTimeout(function(){ hapus(d); }, 280);
+      if(pecah >= butuh) selesaiGame("gelembung", "pikiran beratnya pecah semua, lega ya");
+    });
+
+    bola.push(b);
+  }
+
+  this.petunjuk = "tap gelembungnya sampe pecah";
+
+  this.jalan = function(dt){
+    jeda += dt;
+    if(jeda > 600 && bola.length < 7){ jeda = 0; keluar(); }
+    for(var i=bola.length-1;i>=0;i--){
+      var b = bola[i];
+      if(b.mati){ bola.splice(i,1); continue; }
+      b.y += b.c; b.g += 0.02; b.x += Math.sin(b.g)*0.55;
+      if(b.y < -b.uk){ hapus(b.d); bola.splice(i,1); continue; }
+      b.d.style.transform = "translate("+(b.x-b.uk/2).toFixed(1)+"px,"+(b.y-b.uk/2).toFixed(1)+"px)";
+    }
+  };
+
+  this.bersih = function(){
+    for(var i=0;i<bola.length;i++) hapus(bola[i].d);
+    bola = [];
+    hilma.classList.remove("kecil");
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gKartu(){
+  var butuh = pasanganKartu.length;
+  var cocok = 0, kunci = false, pertama = null;
+  hilma.classList.add("kecil");
+
+  var tumpuk = [];
+  for(var i=0;i<pasanganKartu.length;i++){
+    tumpuk.push({i:i, p:pasanganKartu[i]});
+    tumpuk.push({i:i, p:pasanganKartu[i]});
+  }
+  // acak urutannya
+  for(var k=tumpuk.length-1;k>0;k--){
+    var j = (Math.random()*(k+1))|0;
+    var tmp = tumpuk[k]; tumpuk[k] = tumpuk[j]; tumpuk[j] = tmp;
+  }
+
+  var papan = buat("");
+  papan.id = "papanKartu";
+
+  tumpuk.forEach(function(c){
+    var b = document.createElement("button");
+    b.className = "kartu";
+    b.innerHTML = '<div class="dalam"><div class="sisi depan">?</div><div class="sisi belakang">'+c.p.ikon+'</div></div>';
+
+    b.addEventListener("pointerdown", function(ev){
+      ev.preventDefault();
+      if(kunci || b.classList.contains("buka")) return;
+      b.classList.add("buka");
+      nada(600,0.08,"sine",0.1);
+      getar(10);
+
+      if(!pertama){ pertama = {d:b, c:c}; return; }
+      if(pertama.d === b) return;
+
+      kunci = true;
+      var a = pertama;
+
+      if(a.c.i === c.i){
+        setTimeout(function(){
+          a.d.classList.add("cocok");
+          b.classList.add("cocok");
+          var r = b.getBoundingClientRect();
+          ledak(r.left+r.width/2, r.top+r.height/2, true);
+          ting(700); loncatDikit();
+          tulis(c.p.pesan);
+          kataNaik(c.p.ikon, r.left+r.width/2, r.top, "#ffe08a");
+          cocok++;
+          skorTeks.textContent = cocok+" / "+butuh;
+          st.progres = cocok/butuh;
+          hitungPoin();
+          pertama = null; kunci = false;
+          if(cocok >= butuh) selesaiGame("kartu", "ketemu semua, pesennya kebuka semua juga");
+        }, 300);
+      } else {
+        setTimeout(function(){
+          a.d.classList.remove("buka");
+          b.classList.remove("buka");
+          pertama = null; kunci = false;
+        }, 700);
+      }
+    });
+
+    papan.appendChild(b);
+  });
+
+  this.petunjuk = "cocokin 2 kartu yang sama";
+  this.jalan = function(){};
+  this.bersih = function(){ hapus(papan); hilma.classList.remove("kecil"); };
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gBalon(){
+  var butuh = 22, tap = 0, uk = 74;
+  hilma.classList.add("kecil");
+
+  var d = buat("");
+  d.id = "balon";
+  d.innerHTML = '<svg viewBox="0 0 100 140">'+
+    '<ellipse cx="50" cy="52" rx="38" ry="46" fill="#ff8fb0"/>'+
+    '<ellipse cx="38" cy="36" rx="11" ry="15" fill="rgba(255,255,255,.4)"/>'+
+    '<path d="M50 98 l-8 10 h16 z" fill="#e0708f"/>'+
+    '<path d="M50 108 q10 14 -2 24 q-10 10 2 8" stroke="#ffd9e4" stroke-width="2.5" fill="none"/></svg>';
+
+  var x = L/2, y = T*0.3, cx = acak(-0.6,0.6), cy = 0;
+
+  d.addEventListener("pointerdown", function(ev){
+    ev.preventDefault();
+    cy = -7.4;              // tinggi lompatannya, jangan diubah udah pas
+    cx += acak(-1.4,1.4);
+    tap++;
+    skorTeks.textContent = tap+" / "+butuh;
+    ledak(x,y+20,false); ting(acak(500,760)); loncatDikit(); getar(14);
+    kataNaik(ambilAcak(pujian), x, y, "#ffd9e4");
+    st.progres = tap/butuh;
+    hitungPoin();
+    if(tap >= butuh) selesaiGame("balon", "balonnya gak jatuh sekalipun, mantep");
+  });
+
+  this.petunjuk = "tap balonnya biar gak jatuh";
+
+  this.jalan = function(dt){
+    var f = dt/16.67;
+    cy += 0.115*f;
+    y += cy*f;
+    x += cx*f;
+    cx *= 0.995;
+    if(x < uk/2){ x = uk/2; cx = Math.abs(cx); }
+    if(x > L-uk/2){ x = L-uk/2; cx = -Math.abs(cx); }
+    if(y > T-70){
+      y = T*0.22; cy = 0; x = L/2; cx = acak(-0.6,0.6);
+      tulis("jatuh dikit gapapa, angkat lagi");
+    }
+    if(y < uk/2){ y = uk/2; cy = Math.abs(cy)*0.4; }
+    d.style.transform = "translate("+(x-uk/2).toFixed(1)+"px,"+(y-uk/2).toFixed(1)+"px)";
+  };
+
+  this.bersih = function(){ hapus(d); hilma.classList.remove("kecil"); };
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gPencet(){
+  var butuh = 15, kena = 0, jeda = 0, target = [];
+  hilma.classList.add("kecil");
+
+  function keluar(){
+    var d = buat("targetHati");
+    d.textContent = Math.random()<0.25 ? "⭐" : "💗";
+    var x = acak(50, L-50), y = acak(T*0.18, T*0.78);
+    d.style.transform = "translate("+(x-32)+"px,"+(y-32)+"px)";
+    var t = {d:d, x:x, y:y, umur:1250, mati:false};
+
+    d.addEventListener("pointerdown", function(ev){
+      ev.preventDefault();
+      if(t.mati) return;
+      t.mati = true;
+      hapus(d);
+      kena++;
+      skorTeks.textContent = kena+" / "+butuh;
+      ledak(x,y, d.textContent === "⭐");
+      ting(acak(560,820)); loncatDikit(); getar(12);
+      kataNaik(ambilAcak(pujian), x, y-14, "#ffe08a");
+      st.progres = kena/butuh;
+      hitungPoin();
+      if(kena >= butuh) selesaiGame("pencet", "refleks kamu cepet juga ternyata");
+    });
+
+    target.push(t);
+  }
+
+  this.petunjuk = "pencet hatinya sebelum ilang";
+
+  this.jalan = function(dt){
+    jeda += dt;
+    if(jeda > Math.max(420, 900 - kena*30) && target.length < 4){ jeda = 0; keluar(); }
+    for(var i=target.length-1;i>=0;i--){
+      var t = target[i];
+      if(t.mati){ target.splice(i,1); continue; }
+      t.umur -= dt;
+      if(t.umur <= 0){ hapus(t.d); target.splice(i,1); continue; }
+      if(t.umur < 300) t.d.style.opacity = (t.umur/300).toFixed(2);
+    }
+  };
+
+  this.bersih = function(){
+    for(var i=0;i<target.length;i++) hapus(target[i].d);
+    target = [];
+    hilma.classList.remove("kecil");
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gSiram(){
+  var tumbuh = 0, nahan = false;
+  hilma.classList.add("kecil");
+
+  var zona = buat(""); zona.id = "zonaTap";
+  var bunga = buat(""); bunga.id = "bunga";
+  bunga.innerHTML =
+    '<svg viewBox="0 0 120 200">'+
+    '<g id="batang" style="transform-origin:60px 190px">'+
+    '<path d="M60 190 L60 90" stroke="#5fbf7a" stroke-width="7" stroke-linecap="round"/>'+
+    '<path d="M60 150 q-26 -12 -30 -34 q26 2 30 34 Z" fill="#5fbf7a"/>'+
+    '<path d="M60 130 q26 -12 30 -34 q-26 2 -30 34 Z" fill="#6fd08a"/>'+
+    '</g>'+
+    '<g id="kelopak" style="transform-origin:60px 82px">'+
+    '<circle cx="60" cy="60" r="17" fill="#ff9fb4"/><circle cx="82" cy="82" r="17" fill="#ff9fb4"/>'+
+    '<circle cx="38" cy="82" r="17" fill="#ff9fb4"/><circle cx="60" cy="104" r="17" fill="#ff9fb4"/>'+
+    '<circle cx="60" cy="82" r="14" fill="#ffe08a"/>'+
+    '</g></svg>';
+
+  var batang = bunga.querySelector("#batang");
+  var kelopak = bunga.querySelector("#kelopak");
+
+  function mulaiNyiram(e){ e.preventDefault(); nahan = true; }
+  function stopNyiram(){ nahan = false; }
+  zona.addEventListener("pointerdown", mulaiNyiram);
+  window.addEventListener("pointerup", stopNyiram);
+  window.addEventListener("pointercancel", stopNyiram);
+
+  this.petunjuk = "tahan layarnya, siram sampe mekar";
+
+  this.jalan = function(dt){
+    if(nahan){
+      tumbuh += dt*0.048;
+      if(Math.random() < 0.4){
+        // air nya numpang di sistem partikel, males bikin baru
+        partikel.push({x:L*0.6+acak(-40,40), y:T*0.25, cx:acak(-.4,.4), cy:acak(2,4),
+          umur:1, turun:0.022, s:4, r:0, pr:0, grav:0.06, w:"#8fd0ff", b:"kotak"});
+      }
+      if(Math.random() < 0.02) getar(8);
+    } else {
+      tumbuh -= dt*0.012;
+    }
+    tumbuh = batasi(tumbuh, 0, 100);
+    st.progres = tumbuh/100;
+    hitungPoin();
+    skorTeks.textContent = Math.floor(tumbuh)+" %";
+
+    batang.style.transform = "scaleY("+(0.15 + 0.85*(tumbuh/100)).toFixed(3)+")";
+    var mekar = batasi((tumbuh-45)/55, 0, 1);
+    kelopak.style.transform = "scale("+mekar.toFixed(3)+")";
+    kelopak.style.opacity = mekar.toFixed(2);
+
+    if(tumbuh >= 100){
+      nahan = false;
+      selesaiGame("siram", "bunganya mekar, kayak kamu nanti kalo udah baikan");
+    }
+  };
+
+  this.bersih = function(){
+    zona.removeEventListener("pointerdown", mulaiNyiram);
+    window.removeEventListener("pointerup", stopNyiram);
+    window.removeEventListener("pointercancel", stopNyiram);
+    hapus(zona); hapus(bunga);
+    hilma.classList.remove("kecil");
+  };
+
+  skorTeks.textContent = "0 %";
+}
+
+
+function gLompat(){
+  var butuh = 12, lewat = 0, awan = [], jeda = 0;
+  hilma.classList.add("sembunyi");
+
+  var tanah = T*0.74;
+  var px = L*0.26, py = tanah;
+  var kecepatanY = 0, diTanah = true, kebal = 0;
+
+  var zona = buat(""); zona.id = "zonaTap";
+  function lompat(e){
+    e.preventDefault();
+    if(!diTanah) return;
+    kecepatanY = -13.5;
+    diTanah = false;
+    nada(520,0.1,"square",0.1);
+    getar(10);
+  }
+  zona.addEventListener("pointerdown", lompat);
+
+  this.petunjuk = "tap layar buat lompat, hindarin awan mendungnya";
+
+  this.jalan = function(dt){
+    tanah = T*0.74; px = L*0.26;   // sama, biar gak melayang kalo layarnya berubah
+    var f = dt/16.67;
+    kecepatanY += 0.72*f;
+    py += kecepatanY*f;
+    if(py >= tanah){ py = tanah; kecepatanY = 0; diTanah = true; }
+    if(kebal > 0) kebal -= dt;
+
+    jeda += dt;
+    if(jeda > acak(900,1500)){ jeda = 0; awan.push({x:L+60, y:tanah-22, lewat:false}); }
+
+    for(var i=awan.length-1;i>=0;i--){
+      var a = awan[i];
+      a.x -= 4.6*f;
+      if(!a.lewat && a.x < px-30){
+        a.lewat = true;
+        lewat++;
+        skorTeks.textContent = lewat+" / "+butuh;
+        kataNaik(ambilAcak(pujian), px, py-70, "#cfe9ff");
+        ting(620);
+        st.progres = lewat/butuh;
+        hitungPoin();
+        if(lewat >= butuh){ selesaiGame("lompat","awan mendungnya kelewatan semua"); return; }
+      }
+      if(a.x < -80){ awan.splice(i,1); continue; }
+      if(kebal <= 0 && Math.abs(a.x-px) < 34 && py > tanah-40){
+        kebal = 900;
+        getar([20,40,20]);
+        nada(180,0.2,"sawtooth",0.1);
+        tulis("aduh kena, gapapa lanjut aja");
+      }
+    }
+  };
+
+  this.gambar = function(){
+    ctxG.fillStyle = "rgba(255,255,255,.14)";
+    ctxG.fillRect(0, tanah+24, L, 3);
+
+    for(var i=0;i<awan.length;i++){
+      var a = awan[i];
+      ctxG.fillStyle = "rgba(120,130,180,.85)";
+      ctxG.beginPath();
+      ctxG.arc(a.x, a.y, 17, 0, 6.28);
+      ctxG.arc(a.x+16, a.y+4, 14, 0, 6.28);
+      ctxG.arc(a.x-15, a.y+5, 13, 0, 6.28);
+      ctxG.fill();
+      ctxG.strokeStyle = "rgba(150,180,220,.6)";
+      ctxG.lineWidth = 2;
+      ctxG.beginPath();
+      ctxG.moveTo(a.x-6, a.y+16); ctxG.lineTo(a.x-9, a.y+26);
+      ctxG.moveTo(a.x+7, a.y+16); ctxG.lineTo(a.x+4, a.y+26);
+      ctxG.stroke();
+    }
+
+    ctxG.globalAlpha = (kebal > 0 && Math.floor(kebal/90)%2 === 0) ? 0.35 : 1;
+    ctxG.fillStyle = "#ff6b93";
+    ctxG.shadowColor = "rgba(255,120,150,.7)";
+    ctxG.shadowBlur = 12;
+    bentukHati(ctxG, px, py, 3.4, 0);
+    ctxG.fill();
+    ctxG.shadowBlur = 0;
+    ctxG.globalAlpha = 1;
+  };
+
+  this.bersih = function(){
+    zona.removeEventListener("pointerdown", lompat);
+    hapus(zona);
+    awan = [];
+    hilma.classList.remove("sembunyi");
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gKue(){
+  var butuh = 8, tumpuk = [];
+  var lebarSkrg = Math.min(190, L*0.55);
+  var x = 0, arah = 1, laju = 2.6, tinggi = 26;
+  var dasar = T*0.82;
+  hilma.classList.add("kecil");
+
+  var warna = ["#ff9fb4","#ffd48a","#ffe9a8","#c9f0a8","#a8dcf0","#d4b8f0","#ffb8c8","#ffe08a"];
+
+  var zona = buat(""); zona.id = "zonaTap";
+  function taro(e){
+    e.preventDefault();
+    if(tumpuk.length === 0){
+      tumpuk.push({x:x, l:lebarSkrg});
+    } else {
+      var atas = tumpuk[tumpuk.length-1];
+      var kiri = Math.max(x - lebarSkrg/2, atas.x - atas.l/2);
+      var kanan = Math.min(x + lebarSkrg/2, atas.x + atas.l/2);
+      var timpa = kanan - kiri;
+      if(timpa < 14){
+        tulis("yah meleset, coba lagi pelan pelan");
+        getar([20,30,20]);
+        nada(200,0.18,"sawtooth",0.1);
+        return;   // gak gue kurangin skornya, kasian
+      }
+      lebarSkrg = timpa;
+      tumpuk.push({x:(kiri+kanan)/2, l:timpa});
+    }
+    ledak(x, dasar - tumpuk.length*tinggi, false);
+    ting(acak(520,780)); loncatDikit(); getar(14);
+    kataNaik(ambilAcak(pujian), x, dasar - tumpuk.length*tinggi - 20, "#ffe0b0");
+    skorTeks.textContent = tumpuk.length+" / "+butuh;
+    st.progres = tumpuk.length/butuh;
+    hitungPoin();
+    laju += 0.25;
+    if(tumpuk.length >= butuh) selesaiGame("kue","kuenya jadi, tinggal ditiup lilinnya");
+  }
+  zona.addEventListener("pointerdown", taro);
+
+  this.petunjuk = "tap buat naro lapisan kuenya, pas pasin";
+
+  this.jalan = function(dt){
+    dasar = T*0.82;          // kalo hp nya dimiringin, dasarnya ikut pindah
+    var f = dt/16.67;
+    x += laju*arah*f;
+    if(x > L - lebarSkrg/2 - 6){ x = L - lebarSkrg/2 - 6; arah = -1; }
+    if(x < lebarSkrg/2 + 6){ x = lebarSkrg/2 + 6; arah = 1; }
+  };
+
+  this.gambar = function(){
+    for(var i=0;i<tumpuk.length;i++){
+      var t = tumpuk[i];
+      ctxG.fillStyle = warna[i % warna.length];
+      ctxG.fillRect(t.x - t.l/2, dasar - (i+1)*tinggi, t.l, tinggi-3);
+    }
+    ctxG.fillStyle = warna[tumpuk.length % warna.length];
+    ctxG.globalAlpha = 0.85;
+    ctxG.fillRect(x - lebarSkrg/2, dasar - (tumpuk.length+1)*tinggi, lebarSkrg, tinggi-3);
+    ctxG.globalAlpha = 1;
+  };
+
+  this.bersih = function(){
+    zona.removeEventListener("pointerdown", taro);
+    hapus(zona);
+    tumpuk = [];
+    hilma.classList.remove("kecil");
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gKalimat(){
+  var butuh = kalimatSusun.length;
+  var nomor = 0, urutan = 0;
+  hilma.classList.add("kecil");
+
+  var kotakSusun = buat(""); kotakSusun.id = "susunan";
+  var kotakPilih = buat(""); kotakPilih.id = "pilihanKata";
+
+  function pasangSoal(){
+    urutan = 0;
+    kotakSusun.innerHTML = "";
+    kotakPilih.innerHTML = "";
+
+    var kata = kalimatSusun[nomor].slice();
+    var acakan = kata.slice();
+    for(var i=acakan.length-1;i>0;i--){
+      var j = (Math.random()*(i+1))|0;
+      var tmp = acakan[i]; acakan[i] = acakan[j]; acakan[j] = tmp;
+    }
+
+    acakan.forEach(function(w){
+      var b = document.createElement("button");
+      b.className = "chip";
+      b.textContent = w;
+      b.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        if(w !== kata[urutan]){
+          b.classList.add("salah");
+          getar([15,30,15]);
+          setTimeout(function(){ b.classList.remove("salah"); }, 320);
+          return;
+        }
+        b.classList.add("kepake");
+        var s = document.createElement("span");
+        s.className = "katatersusun";
+        s.textContent = w;
+        kotakSusun.appendChild(s);
+        urutan++;
+        nada(560 + urutan*60, 0.1, "sine", 0.1);
+        getar(10);
+
+        if(urutan >= kata.length){
+          var r = kotakSusun.getBoundingClientRect();
+          ledak(r.left+r.width/2, r.top+r.height/2, true);
+          ting(760); loncatDikit();
+          nomor++;
+          skorTeks.textContent = nomor+" / "+butuh;
+          st.progres = nomor/butuh;
+          hitungPoin();
+          if(nomor >= butuh){ selesaiGame("kalimat","semua kalimatnya kesusun, baca lagi deh"); return; }
+          setTimeout(pasangSoal, 700);
+        }
+      });
+      kotakPilih.appendChild(b);
+    });
+  }
+  pasangSoal();
+
+  this.petunjuk = "tap katanya sesuai urutan yang bener";
+  this.jalan = function(){};
+  this.bersih = function(){
+    hapus(kotakSusun); hapus(kotakPilih);
+    hilma.classList.remove("kecil");
+  };
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+function gBintang(){
+  hilma.classList.add("kecil");
+
+  // titiknya persen, biar aman di layar hp manapun
+  var pola = [
+    {nama:"hati", titik:[[.5,.30],[.34,.18],[.22,.30],[.30,.48],[.5,.66],[.70,.48],[.78,.30],[.66,.18]]},
+    {nama:"bintang", titik:[[.5,.16],[.66,.58],[.24,.32],[.76,.32],[.34,.58]]},
+    {nama:"senyum", titik:[[.24,.30],[.26,.46],[.36,.58],[.5,.62],[.64,.58],[.74,.46],[.76,.30]]}
+  ];
+
+  var butuh = pola.length;
+  var kePola = 0, keTitik = 0;
+  var garis = [], titikDom = [];
+
+  function pasangPola(){
+    for(var z=0;z<titikDom.length;z++) hapus(titikDom[z]);
+    titikDom = [];
+    garis = [];
+    keTitik = 0;
+
+    var p = pola[kePola];
+
+    p.titik.forEach(function(t, i){
+      var d = buat("titikBintang");
+      d.textContent = "✦";
+      var px = t[0]*L;
+      var py = t[1]*T*0.92 + T*0.06;
+      d.style.left = px+"px";
+      d.style.top = py+"px";
+      d._x = px; d._y = py;
+
+      d.addEventListener("pointerdown", function(ev){
+        ev.preventDefault();
+        if(i !== keTitik) return;
+
+        d.classList.remove("giliran");
+        d.classList.add("udah");
+        if(keTitik > 0) garis.push([titikDom[keTitik-1]._x, titikDom[keTitik-1]._y, px, py]);
+        keTitik++;
+        nada(500 + keTitik*55, 0.09, "sine", 0.1);
+        getar(10);
+        ledak(px, py, true);
+
+        if(keTitik < titikDom.length){
+          titikDom[keTitik].classList.add("giliran");
+          return;
+        }
+
+        // nutup polanya, sambungin titik terakhir ke titik pertama
+        garis.push([titikDom[titikDom.length-1]._x, titikDom[titikDom.length-1]._y, titikDom[0]._x, titikDom[0]._y]);
+        ting(780); loncatDikit();
+        kataNaik(ambilAcak(pujian), L/2, T*0.4, "#ffe08a");
+        kePola++;
+        skorTeks.textContent = kePola+" / "+butuh;
+        st.progres = kePola/butuh;
+        hitungPoin();
+        if(kePola >= butuh){ selesaiGame("rasi","tiga rasi jadi, langitnya jadi rame"); return; }
+        setTimeout(pasangPola, 800);
+      });
+
+      titikDom.push(d);
+    });
+
+    titikDom[0].classList.add("giliran");
+    tulis("sambungin bintangnya, bentuk "+p.nama);
+  }
+  pasangPola();
+
+  this.petunjuk = "tap bintang yang nyala, urut ya";
+
+  var lebarDulu = L, tinggiDulu = T;
+  this.jalan = function(){
+    if(L === lebarDulu && T === tinggiDulu) return;
+    lebarDulu = L; tinggiDulu = T;
+    // layarnya berubah, titiknya digeser lagi + garisnya digambar ulang
+    var t = pola[kePola].titik;
+    for(var i=0;i<titikDom.length;i++){
+      var nx = t[i][0]*L, ny = t[i][1]*T*0.92 + T*0.06;
+      titikDom[i].style.left = nx+"px";
+      titikDom[i].style.top = ny+"px";
+      titikDom[i]._x = nx; titikDom[i]._y = ny;
+    }
+    garis = [];
+    for(var g=1; g<keTitik; g++){
+      garis.push([titikDom[g-1]._x, titikDom[g-1]._y, titikDom[g]._x, titikDom[g]._y]);
+    }
+  };
+
+  this.gambar = function(){
+    if(garis.length === 0) return;
+    ctxG.strokeStyle = "rgba(255,235,170,.85)";
+    ctxG.lineWidth = 2.5;
+    ctxG.lineCap = "round";
+    ctxG.shadowColor = "rgba(255,225,140,.8)";
+    ctxG.shadowBlur = 10;
+    ctxG.beginPath();
+    for(var i=0;i<garis.length;i++){
+      ctxG.moveTo(garis[i][0], garis[i][1]);
+      ctxG.lineTo(garis[i][2], garis[i][3]);
+    }
+    ctxG.stroke();
+    ctxG.shadowBlur = 0;
+  };
+
+  this.bersih = function(){
+    for(var i=0;i<titikDom.length;i++) hapus(titikDom[i]);
+    titikDom = []; garis = [];
+    hilma.classList.remove("kecil");
+  };
+
+  skorTeks.textContent = "0 / "+butuh;
+}
+
+
+// ===================================================
+
+var semuaGame = [
+  {id:"tangkep",   ikon:"💗", nama:"tangkep hati",    buat:function(){ return new gTangkep(); }},
+  {id:"gelembung", ikon:"🫧", nama:"pecahin pikiran", buat:function(){ return new gGelembung(); }},
+  {id:"kartu",     ikon:"🃏", nama:"kartu ingatan",   buat:function(){ return new gKartu(); }},
+  {id:"balon",     ikon:"🎈", nama:"jaga balon",      buat:function(){ return new gBalon(); }},
+  {id:"pencet",    ikon:"⚡", nama:"pencet cepet",    buat:function(){ return new gPencet(); }},
+  {id:"siram",     ikon:"🌱", nama:"siram bunga",     buat:function(){ return new gSiram(); }},
+  {id:"lompat",    ikon:"☔", nama:"lompatin awan",   buat:function(){ return new gLompat(); }},
+  {id:"kue",       ikon:"🍰", nama:"susun kue",       buat:function(){ return new gKue(); }},
+  {id:"kalimat",   ikon:"💌", nama:"susun kalimat",   buat:function(){ return new gKalimat(); }},
+  {id:"rasi",      ikon:"⭐", nama:"sambung bintang", buat:function(){ return new gBintang(); }}
+];
+
+var gameJalan = null;
+var lagiKelar = false;   // sempet kepanggil dobel kalo masih nge-tap pas nunggu layar menang
+
+function mulaiGame(id){
+  nyalainAudio();
+  stopGame();
+  st.ngitung = !st.beres[id];   // kalo udah pernah beres, mainnya gak nambah progres
+  st.progres = 0;
+  for(var i=0;i<semuaGame.length;i++){
+    if(semuaGame[i].id === id){ gameJalan = semuaGame[i].buat(); break; }
+  }
+  sembunyi(lyMenu); sembunyi(lySelesai);
+  tbBalik.classList.remove("ilang");
+  tulis(gameJalan.petunjuk);
+  jedaOmong = setTimeout(mulaiOmong, 3400);
+  hitungPoin();
+}
+function stopGame(){
+  stopOmong();
+  if(gameJalan && gameJalan.bersih) gameJalan.bersih();
+  gameJalan = null;
+  lagiKelar = false;
+  ctxG.clearRect(0,0,L,T);
+  skorTeks.textContent = "";
+}
+function selesaiGame(id, pesan){
+  if(lagiKelar) return;
+  lagiKelar = true;
+  if(!st.beres[id]){ st.beres[id] = true; st.jmlBeres++; }
+  st.ngitung = false;
+  st.progres = 0;
+  hitungPoin();
+  menang(); konfeti(); getar([20,60,20,60,20]);
+  setTimeout(function(){
+    stopGame();
+    el("#judulSelesai").textContent = st.jmlBeres >= TOTAL_GAME ? "kelar semua 🌈" : "nice 💛";
+    el("#pesanSelesai").textContent = pesan + "\n\n" + ambilAcak(kataManis);
+    tampil(lySelesai);
+  }, 850);
+}
+
+function tampil(x){ x.classList.remove("ilang"); }
+function sembunyi(x){ x.classList.add("ilang"); }
+
+function bukaMenu(){
+  stopGame();
+  tbBalik.classList.add("ilang");
+  sembunyi(lySelesai); sembunyi(lySurat); sembunyi(lyMood);
+  el("#subMenu").textContent = daftarMood[st.mood].sapa;
+  el("#judulMenu").textContent = st.jmlBeres >= TOTAL_GAME ? "dia udah jauh lebih ceria" : "yuk temenin dia";
+
+  var kotak = document.querySelectorAll(".kartuGame");
+  for(var i=0;i<kotak.length;i++){
+    kotak[i].classList.toggle("beres", !!st.beres[kotak[i].getAttribute("data-id")]);
+  }
+
+  el("#tbSurat").classList.toggle("ilang", st.jmlBeres < TOTAL_GAME);
+  tulis(ambilAcak(daftarMood[st.mood].omong));
+  tampil(lyMenu);
+}
+
+// tombol game nya digenerate dari array, males nulis html 10 kali
+(function(){
+  var wadah = el("#daftarGame");
+  for(var i=0;i<semuaGame.length;i++){
+    (function(g){
+      var b = document.createElement("button");
+      b.className = "kartuGame";
+      b.setAttribute("data-id", g.id);
+      b.innerHTML = "<b>"+g.ikon+"</b><span>"+g.nama+"</span>";
+      b.addEventListener("click", function(){ mulaiGame(g.id); });
+      wadah.appendChild(b);
+    })(semuaGame[i]);
+  }
+})();
+
+var tblMood = document.querySelectorAll(".mood");
+for(var i=0;i<tblMood.length;i++){
+  tblMood[i].addEventListener("click", function(){
+    nyalainAudio();
+    st.mood = this.getAttribute("data-mood");
+    st.beres = {}; st.jmlBeres = 0; st.progres = 0; st.ngitung = false;
+    hitungPoin();
+    bukaMenu();
+  });
+}
+
+el("#tbLanjut").addEventListener("click", bukaMenu);
+el("#tbGantiMood").addEventListener("click", function(){
+  stopGame();
+  sembunyi(lyMenu); sembunyi(lySurat);
+  tampil(lyMood);
+});
+tbBalik.addEventListener("click", bukaMenu);
+
+
+// suratnya diketik satu satu biar kerasa
+el("#tbSurat").addEventListener("click", function(){
+  sembunyi(lyMenu);
+  tampil(lySurat);
+  var kotak = el("#isiSurat"), tbPeluk = el("#tbPeluk");
+  kotak.textContent = "";
+  tbPeluk.classList.add("ilang");
+  var i = 0;
+  (function ketik(){
+    if(i < surat.length){
+      i++;
+      kotak.textContent = surat.slice(0,i);
+      var c = surat.charAt(i-1);
+      setTimeout(ketik, c === "\n" ? 130 : (c === " " ? 18 : 30));
+    } else {
+      tbPeluk.classList.remove("ilang");
+    }
+  })();
+});
+
+el("#tbPeluk").addEventListener("click", function(){
+  konfeti(); menang(); loncatDikit(); getar([30,50,30]);
+  st.poin = 100;
+  gambarUlangUI();
+  setTimeout(function(){ sembunyi(lySurat); bukaMenu(); }, 1500);
+});
+
+
+var terakhir = 0;
+function putar(ts){
+  var dt = Math.min(48, (ts - terakhir) || 16);
+  terakhir = ts;
+
+  ctxB.clearRect(0,0,L,T);
+  gambarBintang(ts);
+  gambarPelangi();
+  gambarHujan();
+  gambarHatiTerbang();
+
+  ctxG.clearRect(0,0,L,T);
+  if(gameJalan){
+    gameJalan.jalan(dt, ts);
+    if(gameJalan.gambar) gameJalan.gambar();
+  }
+
+  ctxD.clearRect(0,0,L,T);
+  gambarPartikel();
+
+  gerakinHilma(dt);
+  requestAnimationFrame(putar);
+}
+
+ukurUlang();
+hitungPoin();
+tulis("pilih dulu hilma lagi gimana");
+requestAnimationFrame(putar);
+
+// safari suka zoom sendiri kalo double tap
+document.addEventListener("dblclick", function(e){ e.preventDefault(); }, {passive:false});
+document.addEventListener("gesturestart", function(e){ e.preventDefault(); });
+
+})();
+</script>
+</body>
+</html>
